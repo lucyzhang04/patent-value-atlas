@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patent Value Atlas</title>
+<meta name="description" content="A century of U.S. public-firm patents from the KPSS dataset: citations, inflation-adjusted value, technology mix, examination lag and firm composition.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="vendor/echarts.min.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">KPSS patent data · 1926–2025</p>
+    <h1>Patent Value Atlas</h1>
+    <p class="lede">What a century of patents granted to U.S. public companies was worth, which fields they came from,
+      how long they took to get through the patent office, and how the firms behind them changed.</p>
+    <div class="kpis" id="kpis"></div>
+  </div>
+</header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#cited">Top patents</a><a href="#inflation">Inflation</a><a href="#industries">Technology mix</a>
+  <a href="#pendency">Time to grant</a><a href="#firms">Firms</a><a href="#method">Method</a>
+</div></nav>
+
+<main class="wrap">
+
+<section id="cited">
+  <h2>Most-cited (and most valuable) patents</h2>
+  <p class="note">Ranked across all years or within one decade. Older patents have had longer to collect citations,
+    so ranking within a decade is the fairer comparison. Values are KPSS stock-market values (ξ) in millions of dollars.</p>
+  <div class="controls">
+    <div class="seg" id="rankBy">
+      <button data-v="cites" class="on">Rank by citations</button><button data-v="value">Rank by value (2025 $)</button>
+    </div>
+    <label>Period
+      <select id="rankDecade"><option value="all">All years</option></select>
+    </label>
+    <label>Field
+      <select id="rankCat"><option value="all">All fields</option></select>
+    </label>
+  </div>
+  <div class="table-wrap"><table id="topTable"><thead><tr>
+    <th>#</th><th>Patent</th><th>Granted</th><th>Firm (PERMNO)</th><th>Field</th><th>Primary CPC</th>
+    <th class="num">Citations</th><th class="num">Value at grant</th><th class="num">Value, 2025 $</th>
+  </tr></thead><tbody></tbody></table></div>
+  <p class="note small">Firm names are shown only for a handful of well-known CRSP PERMNOs; KPSS identifies firms by PERMNO only.
+    Patent numbers link to Google Patents.</p>
+</section>
+
+<section id="inflation">
+  <h2>Putting every patent in 2025 dollars</h2>
+  <p class="note">You were right that the raw <code>xi_nominal</code> column is the value <em>in dollars of the grant year</em>.
+    KPSS also ships <code>xi_real</code>, which is the same number deflated to <strong>1982 dollars</strong> with the annual CPI.
+    (The nominal/real ratio is exactly 1.000 for every 1982 grant and constant within each year.)
+    Every value on this site is <code>xi_real × <span id="cpiFactor"></span></code>, the CPI ratio between 2025 and 1982, taken from the data itself.</p>
+  <div class="controls">
+    <div class="seg" id="inflStat">
+      <button data-v="med" class="on">Median patent</button><button data-v="mean">Average patent</button><button data-v="v">All patents that year</button>
+    </div>
+  </div>
+  <div class="chart" id="chInflation"></div>
+</section>
+
+<section id="industries">
+  <h2>Which technologies were patented, and how that shifted</h2>
+  <p class="note">Each patent is assigned to one of eight fields using its first non-Y CPC code (CPC is the current patent classification,
+    applied to old patents as well). See <a href="#method">method</a> for the mapping.</p>
+  <div class="controls">
+    <div class="seg" id="indMetric">
+      <button data-v="n" class="on">Patent count</button><button data-v="v">Value (2025 $)</button>
+    </div>
+    <div class="seg" id="indMode">
+      <button data-v="share" class="on">Share</button><button data-v="abs">Absolute</button>
+    </div>
+  </div>
+  <div class="chart tall" id="chIndustry"></div>
+</section>
+
+<section id="pendency">
+  <h2>How long the patent office takes: filing to grant</h2>
+  <p class="note">KPSS has filing and grant dates but no publication date. U.S. applications were not published at all before the
+    American Inventors Protection Act took effect in late 2000, so filing-to-grant time (pendency) is the only lag available
+    over the full century. Lines show the median for patents granted in each year.</p>
+  <h3>By technology field</h3>
+  <div class="controls">
+    <label>Highlight
+      <select id="pendFocus"><option value="all">Show all fields</option></select>
+    </label>
+    <label class="check"><input type="checkbox" id="pendBand"> Show middle 50% range for highlighted field</label>
+  </div>
+  <div class="chart tall" id="chPendCat"></div>
+
+  <h3>Like-for-like: narrow CPC subclasses</h3>
+  <p class="note">Broad fields mix very different inventions. These compare narrow subclasses, for example kitchen equipment against
+    digital data processing. Choose up to four.</p>
+  <div class="chips" id="scChips"></div>
+  <div class="chart tall" id="chPendSc"></div>
+  <div class="callout" id="pendInsight"></div>
+</section>
+
+<section id="firms">
+  <h2>The firms behind the patents</h2>
+  <p class="note">Each firm in each decade is labelled by the field where most of its patents that decade fall. That shows whether the
+    mix of <em>companies</em> shifted toward tech, separately from the mix of patents.</p>
+  <div class="controls">
+    <div class="seg" id="firmMetric">
+      <button data-v="firms" class="on">Share of firms</button><button data-v="patents">Share of patents</button>
+    </div>
+  </div>
+  <div class="chart tall" id="chFirmMix"></div>
+
+  <div class="grid2">
+    <div>
+      <h3>Patenting firms per year</h3>
+      <div class="chart short" id="chFirmCount"></div>
+    </div>
+    <div>
+      <h3>Share of patents from the 10 biggest patenters</h3>
+      <div class="chart short" id="chConc"></div>
+    </div>
+  </div>
+
+  <h3>Top 10 patenting firms by decade</h3>
+  <div class="controls"><label>Decade <select id="firmDecade"></select></label></div>
+  <div class="table-wrap"><table id="firmTable"><thead><tr>
+    <th>#</th><th>Firm (PERMNO)</th><th>Dominant field</th><th class="num">Patents</th><th class="num">% in dominant field</th><th class="num">Total value, 2025 $</th>
+  </tr></thead><tbody></tbody></table></div>
+</section>
+
+<section id="method">
+  <h2>Method and caveats</h2>
+  <ul class="method">
+    <li><strong>Data.</strong> Kogan, Papanikolaou, Seru &amp; Stoffman (2017, updated 2025): patents granted to CRSP-listed U.S. public firms,
+      matched to PERMNO. Patents by private firms, universities, individuals and most foreign firms are not included.</li>
+    <li><strong>Value (ξ).</strong> Estimated from the firm's stock-price reaction around the grant date, in millions of dollars. It measures what
+      investors thought the patent was worth to the firm, so it scales with firm size and market valuation. That is why the most valuable
+      patents cluster at highly valued firms in recent years.</li>
+    <li><strong>Inflation.</strong> 2025 $ = <code>xi_real</code> × CPI<sub>2025</sub>/CPI<sub>1982</sub> (the ratio the dataset itself implies).
+      Values are not adjusted for growth in stock-market valuations.</li>
+    <li><strong>Citations.</strong> Forward citations counted by KPSS. Recent patents are truncated because they have not had time to be cited.</li>
+    <li><strong>Fields.</strong> First non-Y CPC code → one of eight fields. Computing &amp; Software: G06, G16 (except G16H), G10L. Communications: H04.
+      Semiconductors &amp; Electrical: H01–H03, H05, H10, G11. Drugs, Medical &amp; Biotech: A61, C12, C07K, G16H. Chemicals &amp; Materials:
+      other C, B01, B05, B29, B32, A01N. Instruments &amp; Optics: other G. Mechanical, Transport &amp; Construction: other B, E, F.
+      Consumer &amp; Other: other A, D. About <span id="unclN"></span> patents with no CPC code are left out of the field charts.</li>
+    <li><strong>Pendency.</strong> Grant date minus filing date, grouped by grant year. Eight records with a filing date after the grant date are dropped.
+      Filing dates of continuation applications can make some patents look older than the examination itself took.</li>
+    <li><strong>Firm names.</strong> Only PERMNOs 10107, 10401, 12060, 12490, 14593, 59328, 77178, 84788, 90319 and 93436 are labelled.
+      The rest need a CRSP lookup.</li>
+  </ul>
+</section>
+</main>
+<footer class="wrap"><p id="source">Built from KPSS_2025 and Match_patent_cpc_2025.</p>
+  <p>Rebuilt automatically by GitHub Actions whenever the upstream KPSS repository changes.</p></footer>
+<script src="app.js"></script>
+</body>
+</html>
