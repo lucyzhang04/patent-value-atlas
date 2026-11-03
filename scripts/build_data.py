@@ -6,7 +6,7 @@ Usage:
 
 Downloads KPSS_2025.zip and Match_patent_cpc_2025.zip from the authors' GitHub
 repository (UPSTREAM) at its latest commit, so the site always reflects the
-published data. Runs in GitHub Actions; see .github/workflows/deploy.yml.
+published data. Runs as the Vercel build step (vercel.json).
 
 Inflation: KPSS xi_real is xi_nominal deflated to 1982 dollars with the annual
 CPI (xi_nominal / xi_real is constant within each issue year, = 1.0 in 1982).

@@ -17,8 +17,15 @@ The site doesn't read any local data. `scripts/build_data.py` downloads `KPSS_20
 at its latest commit and aggregates 3.8M patents with DuckDB into small JSON files under `public/data/`.
 The page in `public/` loads those files.
 
-`.github/workflows/deploy.yml` runs this on every push, every Monday, and on demand (Actions → Run workflow).
-It then deploys `public/` to GitHub Pages. The page footer shows which upstream commit it was built from.
+Hosting is on Vercel (`vercel.json`). Vercel runs the build on every push to `main`.
+`.github/workflows/refresh.yml` also calls a Vercel deploy hook every Monday, so new upstream releases get picked up.
+The page footer shows which upstream commit it was built from.
+
+### Vercel setup (one time)
+
+1. On vercel.com, choose Add New → Project and import `patent-value-atlas`. The settings come from `vercel.json`.
+2. In Project → Settings → Git → Deploy Hooks, create a hook for branch `main` and copy its URL.
+3. In the GitHub repo, go to Settings → Secrets and variables → Actions and add a secret named `VERCEL_DEPLOY_HOOK` with that URL.
 
 ## Run locally
 
