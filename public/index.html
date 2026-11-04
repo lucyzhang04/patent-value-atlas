@@ -44,11 +44,11 @@
     </label>
   </div>
   <div class="table-wrap"><table id="topTable"><thead><tr>
-    <th>#</th><th>Patent</th><th>Granted</th><th>Firm (PERMNO)</th><th>Field</th><th>Primary CPC</th>
+    <th>#</th><th>Patent</th><th>Granted</th><th>Assignee (PERMNO)</th><th>Field</th><th>Primary CPC</th>
     <th class="num">Citations</th><th class="num">Value at grant</th><th class="num">Value, 2025 $</th>
   </tr></thead><tbody></tbody></table></div>
-  <p class="note small">Firm names are shown only for a handful of well-known CRSP PERMNOs; KPSS identifies firms by PERMNO only.
-    Patent numbers link to Google Patents.</p>
+  <p class="note small">Assignee is the original assignee listed on Google Patents (patent numbers link there).
+    It can be a subsidiary of the public firm KPSS matched it to, for example Western Electric for AT&amp;T. The grey number is the firm's CRSP PERMNO.</p>
 </section>
 
 <section id="inflation">
@@ -148,8 +148,9 @@
       Consumer &amp; Other: other A, D. About <span id="unclN"></span> patents with no CPC code are left out of the field charts.</li>
     <li><strong>Pendency.</strong> Grant date minus filing date, grouped by grant year. Eight records with a filing date after the grant date are dropped.
       Filing dates of continuation applications can make some patents look older than the examination itself took.</li>
-    <li><strong>Firm names.</strong> Only PERMNOs 10107, 10401, 12060, 12490, 14593, 59328, 77178, 84788, 90319 and 93436 are labelled.
-      The rest need a CRSP lookup.</li>
+    <li><strong>Firm names.</strong> KPSS identifies firms only by CRSP PERMNO. Names come from the original assignee on Google Patents:
+      the patent's own assignee in the patent tables, and in the firm table the most common assignee on that firm's three most-cited patents in that decade.
+      Names are cached in <code>data/assignees.json</code>, and each build only looks up patents it hasn't seen.</li>
   </ul>
 </section>
 </main>

@@ -20,7 +20,14 @@ function money(m) { // m is millions of dollars
   return `$${Math.round(m * 1000)}K`;
 }
 const int = (n) => n.toLocaleString("en-US");
-const firmName = (p) => (KNOWN_FIRMS[p] ? `${KNOWN_FIRMS[p]} (${p})` : String(p));
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+// name: the assignee from Google Patents; falls back to a few known PERMNOs, then the bare PERMNO.
+// Patents with no assignee on Google Patents borrow the name found on the same firm's other patents.
+const permnoNames = {};
+const firmName = (permno, name) => {
+  const n = name || permnoNames[permno] || KNOWN_FIRMS[permno];
+  return n ? `${esc(n)} <span class="permno">${permno}</span>` : `<span class="muted">PERMNO ${permno}</span>`;
+};
 
 let A, T;
 const charts = {};
@@ -100,7 +107,7 @@ function renderTop() {
     <td class="muted">${i + 1}</td>
     <td><a href="https://patents.google.com/patent/US${r.patent_num}" target="_blank" rel="noopener">${int(+r.patent_num)}</a></td>
     <td>${r.issued}</td>
-    <td>${firmName(r.permno)}</td>
+    <td>${firmName(r.permno, r.assignee)}</td>
     <td>${ci(r.cat) >= 0 ? `<span class="sw" style="background:${seriesColor(ci(r.cat))}"></span>` : ""}${r.cat}</td>
     <td class="muted">${r.code ?? "–"}</td>
     <td class="num">${int(r.cites)}</td>
@@ -304,7 +311,7 @@ function renderFirmTable() {
   const rows = A.top_firms.filter((r) => r.decade === +state.firmDecade);
   $("#firmTable tbody").innerHTML = rows.map((r, i) => {
     const ci = A.categories.indexOf(r.cat);
-    return `<tr><td class="muted">${i + 1}</td><td>${firmName(r.permno)}</td>
+    return `<tr><td class="muted">${i + 1}</td><td>${firmName(r.permno, r.name)}</td>
       <td><span class="sw" style="background:${seriesColor(ci)}"></span>${r.cat}</td>
       <td class="num">${int(r.n)}</td><td class="num">${(100 * r.focus).toFixed(0)}%</td><td class="num">${money(r.v)}</td></tr>`;
   }).join("");
@@ -319,6 +326,8 @@ function renderAll() {
 async function init() {
   [A, T] = await Promise.all(["data/aggregates.json", "data/top_patents.json"].map((u) => fetch(u).then((r) => r.json())));
   renderKpis();
+  [...A.top_firms.map((r) => [r.permno, r.name]), ...Object.values(T).flat().map((r) => [r.permno, r.assignee])]
+    .forEach(([p, n]) => { if (n && !permnoNames[p]) permnoNames[p] = n; });
 
   const decades = [...new Set(T.by_cites_decade.map((r) => r.decade))];
   $("#rankDecade").insertAdjacentHTML("beforeend", decades.map((d) => `<option value="${d}">${d}s</option>`).join(""));

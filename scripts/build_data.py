@@ -14,9 +14,16 @@ We restate every value in 2025 dollars: value_2025 = xi_real * CPI_2025/CPI_1982
 where that ratio is read from the data itself (the 2025 nominal/real ratio).
 """
 
+import html
 import json
-from datetime import datetime, timezone
+import os
+import re
 import tempfile
+import time
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -25,7 +32,12 @@ import duckdb
 
 UPSTREAM = "KPSS2017/Technological-Innovation-Resource-Allocation-and-Growth-Extended-Data"
 FILES = ("KPSS_2025", "Match_patent_cpc_2025")
-OUT = Path(__file__).resolve().parent.parent / "public" / "data"
+ROOT = Path(__file__).resolve().parent.parent
+OUT = ROOT / "public" / "data"
+# Patent -> original assignee, scraped from Google Patents and committed so builds
+# only fetch patents they have not seen before.
+ASSIGNEE_CACHE = ROOT / "data" / "assignees.json"
+ASSIGNEE_RE = re.compile(r'<meta name="DC.contributor" content="([^"]*)" scheme="assignee"')
 
 CATEGORIES = [
     "Computing & Software",
@@ -96,18 +108,18 @@ def upstream_commit() -> dict:
     return dict(sha=c["sha"], date=c["commit"]["committer"]["date"])
 
 
-def fetch(sha: str, work: Path) -> dict:
+def fetch(sha: str, work: Path, zip_dir: Path) -> dict:
     paths = {}
     for name in FILES:
         url = f"https://raw.githubusercontent.com/{UPSTREAM}/{sha}/{name}.zip"
-        zpath = work / f"{name}.zip"
-        print("downloading", url)
-        urllib.request.urlretrieve(url, zpath)
+        zpath = zip_dir / f"{name}-{sha[:12]}.zip"
+        if not zpath.exists():
+            print("downloading", url)
+            urllib.request.urlretrieve(url, zpath)
         with zipfile.ZipFile(zpath) as z:
             member = next(m for m in z.namelist() if m.lower().endswith(".csv") and "__MACOSX" not in m)
             z.extract(member, work)
         paths[name] = (work / member).as_posix()
-        zpath.unlink()
     return paths
 
 
@@ -115,8 +127,49 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     commit = upstream_commit()
     with tempfile.TemporaryDirectory() as tmp:
-        paths = fetch(commit["sha"], Path(tmp))
+        # KPSS_ZIP_CACHE (optional, local runs) keeps the upstream zips between builds.
+        zip_dir = Path(os.environ.get("KPSS_ZIP_CACHE") or tmp)
+        zip_dir.mkdir(parents=True, exist_ok=True)
+        paths = fetch(commit["sha"], Path(tmp), zip_dir)
         build(paths["KPSS_2025"], paths["Match_patent_cpc_2025"], commit)
+
+
+def fetch_assignee(patent_num: str):
+    url = f"https://patents.google.com/patent/US{patent_num}/en"
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "Mozilla/5.0 (patent-value-atlas build; github.com/lucyzhang04/patent-value-atlas)"})
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                page = r.read().decode("utf-8", "replace")
+            names = ASSIGNEE_RE.findall(page)
+            return html.unescape(names[0]).strip() if names else ""
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return ""
+            time.sleep(5 * (attempt + 1))
+        except Exception:
+            time.sleep(5 * (attempt + 1))
+    return None  # transient failure: leave uncached so the next build retries
+
+
+def assignees(patent_nums) -> dict:
+    cache = json.loads(ASSIGNEE_CACHE.read_text()) if ASSIGNEE_CACHE.exists() else {}
+    missing = sorted({str(n) for n in patent_nums} - cache.keys())
+    if missing:
+        print(f"fetching {len(missing)} assignee names from Google Patents")
+
+        def one(n):
+            time.sleep(0.25)
+            return n, fetch_assignee(n)
+
+        with ThreadPoolExecutor(2) as ex:
+            for n, name in ex.map(one, missing):
+                if name is not None:
+                    cache[n] = name
+        ASSIGNEE_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        ASSIGNEE_CACHE.write_text(json.dumps(dict(sorted(cache.items())), indent=0, ensure_ascii=False))
+    return cache
 
 
 def build(kpss: str, cpc: str, commit: dict) -> None:
@@ -250,6 +303,29 @@ def build(kpss: str, cpc: str, commit: dict) -> None:
       ) WHERE rk <= 10 ORDER BY decade, rk""")
     for r in top_firms:
         r["v"] = rnd(r["v"], 1); r["focus"] = rnd(r["focus"], 3)
+
+    # ---- assignee names. KPSS identifies firms only by PERMNO, so each top firm-decade is
+    # named after the most common original assignee on its three most-cited patents that decade.
+    reps = rows("""
+      WITH t AS (SELECT decade, permno FROM (
+        SELECT *, row_number() OVER (PARTITION BY decade ORDER BY n DESC) rk FROM fd) WHERE rk <= 10)
+      SELECT decade, permno, patent_num FROM (
+        SELECT t.decade, t.permno, p.patent_num,
+               row_number() OVER (PARTITION BY t.decade, t.permno ORDER BY p.cites DESC, p.v2025 DESC) rk
+        FROM t JOIN p ON p.permno = t.permno AND (p.year // 10) * 10 = t.decade)
+      WHERE rk <= 3 ORDER BY decade, permno, rk""")
+    tops = (top_cites, top_value, top_cites_dec, top_value_dec)
+    names = assignees([r["patent_num"] for lst in tops for r in lst] + [r["patent_num"] for r in reps])
+    for lst in tops:
+        for r in lst:
+            r["assignee"] = names.get(str(r["patent_num"])) or None
+    rep_names = {}
+    for r in reps:
+        if n := names.get(str(r["patent_num"])):
+            rep_names.setdefault((r["decade"], r["permno"]), []).append(n)
+    for r in top_firms:
+        ns = rep_names.get((r["decade"], r["permno"]))
+        r["name"] = Counter(ns).most_common(1)[0][0] if ns else None
 
     conc = rows("""
       WITH f AS (SELECT year, permno, count(*) n FROM p GROUP BY 1, 2),

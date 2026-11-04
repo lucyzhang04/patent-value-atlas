@@ -102,7 +102,8 @@ th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--gri
 th { position: sticky; top: 0; background: var(--surface-1); color: var(--text-secondary); font-weight: 600; font-size: 12.5px; z-index: 1; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 td .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
-td.muted { color: var(--text-muted); }
+td.muted, td .muted { color: var(--text-muted); }
+td .permno { color: var(--text-muted); font-size: 12px; margin-left: 4px; }
 tbody tr:hover { background: var(--grid); }
 
 .callout { border-left: 3px solid var(--accent); padding: 10px 14px; background: var(--grid); border-radius: 0 8px 8px 0;
